@@ -7,8 +7,10 @@ const ejs = require("ejs");
 const bodyParser= require("body-parser");
 const mongoose = require("mongoose");
 
+const bcrypt = require("bcrypt");
+const saltRounds = 12;
 const app = express();
-const md5 =  require("md5")
+
 
  app.set("view engine",ejs);
  app.use(express.static("public"));
@@ -41,25 +43,29 @@ const User = new mongoose.model("User",userSchema);
 //  making get routes
 app.get("/",function(req,res){
     res.render("home.ejs");
-})
+});
 app.get("/login",function(req,res){
     res.render("login.ejs");
-})
+});
 app.get("/register",function(req,res){
     res.render("register.ejs");
-})
+});
+
+
 
 
 app.post("/register",function(req,res){
-    // const newUser=req.body.username; 
-    // const newPassword=req.body.password; 
+   
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+      
+   
    const  newUser= new User({
     email:req.body.username,
-    password:md5(req.body.password)
+    password:hash
 
    });
 
-// save krne se hi encryption hoga and find method use krne se decryption hoga 
+
 newUser.save().then(function(){
     console.log("inserted");
     res.render("secrets.ejs");
@@ -68,40 +74,34 @@ newUser.save().then(function(){
 })
 
 
-
+});
 
 });
 
 // console.log(md5("99"))
 
 app.post("/login",function(req,res){
-// User.find({}).then(function(founditems){
-//     console.log(founditems);
-    
-// founditems.forEach(function(i){
-//     if(i.email===req.body.username && i.password === req.body.password){
-//         res.render("secrets.ejs");
-//     }
-// })
+  const  loginEmail = req.body.username;
+  const loginPassword = req.body.password;
 
-
-// }).catch(function(err){
-//     console.log(err);
-// })
-
-User.findOne({email:req.body.username}).then(function(founditem){
+User.findOne({email:loginEmail}).then(function(founditem){
     // console.log(founditem);
-    if(founditem.password === md5(req.body.password)){
-        res.render("secrets.ejs");
-    }
-    else{
-        console.log("Your Password is wrong");
-    }
+
+    bcrypt.compare(loginPassword, founditem.password, function(err, result) {
+        // result == true
+        if(result===true){
+            res.render("secrets.ejs");
+        }
+        else{
+            console.log("Wrong password ");
+        }
+    });
+   
 }).catch(function(err){
     console.log(err);
-})
+});
 
-})
+});
 
 
 app.listen(3000,()=>
