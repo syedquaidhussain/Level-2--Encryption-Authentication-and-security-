@@ -6,16 +6,29 @@ const express = require("express");
 const ejs = require("ejs");
 const bodyParser= require("body-parser");
 const mongoose = require("mongoose");
+const session = require('express-session');
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
 
-const bcrypt = require("bcrypt");
-const saltRounds = 12;
 const app = express();
+
 
 
  app.set("view engine",ejs);
  app.use(express.static("public"));
 
  app.use(bodyParser.urlencoded({extended:true}));
+
+
+ app.use(session({
+   secret:"Because he knows he is the best.",
+   resave:false,
+   saveUninitialized:false,
+
+ }));
+
+ app.use(passport.initialize());
+ app.use(passport.session());
 
  mongoose.connect("mongodb://0.0.0.0:27017/userDB",{useNewUrlParser:true});
 
@@ -25,15 +38,17 @@ const userSchema= new  mongoose.Schema({
     password:String  
 });
 
-// making secret string 
-// console.log(process.env.SECRET);
- 
-// always do this step before making model 
-// userSchema.plugin(encrypt, { secret: process.env.SECRET,encryptedFields:["password"] });
+
+
+// is line se m hashing aur salting implement kr raha hu 
+userSchema.plugin(passportLocalMongoose)
 
 
 // making model/Table/collection 
 const User = new mongoose.model("User",userSchema);
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 
 
@@ -51,57 +66,81 @@ app.get("/register",function(req,res){
     res.render("register.ejs");
 });
 
+app.get("/secrets",function(req,res){
+    if(req.isAuthenticated()){
+        console.log("You are a valid user");
+        res.render("secrets.ejs");
+    }else{
+        res.redirect("/login");
+    }
+
+});
+
+ app.get("/logout", (req, res) => {
+  req.logout(req.user, err => {
+    if(err){return next(err);}
+    res.redirect("/");
+  });
+});
+
 
 
 
 app.post("/register",function(req,res){
-   
-    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
-      
-   
-   const  newUser= new User({
-    email:req.body.username,
-    password:hash
+   User.register({username:req.body.username},req.body.password,function(err,user){
+    if(err){
+        console.log(err);
 
-   });
+        // yaha pr render krke dekhna register ejs file ko 
+        res.redirect("/register"); 
+    }else{
 
+        // authenticate krke hum login session create kr rahe h 
+        passport.authenticate("local")(req,res,function(){
 
-newUser.save().then(function(){
-    console.log("inserted");
-    res.render("secrets.ejs");
-}).catch(function(err){
- console.log(err);
-})
+            
+            // agr m yaha p render kr deta secrets page ko toh register page pr secret page ka content dikhta but hona y chaiye tha ki secret route ya secrete page secret vala content dikhta 
+            res.redirect("/secrets");
+        })
+    }
+   })
+  
+
 
 
 });
 
-});
-
-// console.log(md5("99"))
 
 app.post("/login",function(req,res){
-  const  loginEmail = req.body.username;
-  const loginPassword = req.body.password;
+ const newuser = new User({
+    username:req.body.username,
+    password:req.body.password,
 
-User.findOne({email:loginEmail}).then(function(founditem){
-    // console.log(founditem);
+ });
 
-    bcrypt.compare(loginPassword, founditem.password, function(err, result) {
-        // result == true
-        if(result===true){
-            res.render("secrets.ejs");
-        }
-        else{
-            console.log("Wrong password ");
-        }
-    });
-   
-}).catch(function(err){
-    console.log(err);
+ req.login(newuser,function(err){
+    if(err){
+        console.log(err);
+        console.log("Not a registered user");
+    }else{
+        passport.authenticate("local")(req,res,function(){
+            res.redirect("/secrets");
+        })
+    }
+
+ })
+        
+    
+
 });
 
-});
+
+// router.post('/logout', function(req, res, next) {
+//     req.logout(function(err) {
+//       if (err) { return next(err); }
+//       res.redirect('/');
+//     });
+//   });
 
 
 app.listen(3000,()=>
